@@ -1,0 +1,37 @@
+//name: Entra ID - Sign-In Location and IP Geolocation Comparison
+//updated: 2026-9-22
+//description:
+//This query compares the country recorded in Entra ID sign-in logs with the country derived from the sign-in IP address during the last 30 days.
+//It uses the geo_info_from_ip_address function to retrieve geographic information for each sign-in IP address.
+//Each sign-in is classified as a match, mismatch, missing Entra location, missing IP geolocation, or unmapped country code.
+//The results show the number of sign-ins and unique users for each location comparison, ordered by sign-in count.
+let CountryCodes =
+    externaldata(Country:string, CountryCode:string)
+    [
+        @"https://raw.githubusercontent.com/mattiasborg82/Hunting/main/General/cc.csv"
+    ]
+    with (
+        format="csv",
+        ignoreFirstRecord=true
+    )
+    | extend CountryCode = toupper(trim(" ", CountryCode))
+    | project CountryCode, Country;
+SigninLogs
+| where TimeGenerated >= ago(30d)
+| extend
+    CountryCode = toupper(trim(" ", tostring(Location))),
+    GeoInfo = geo_info_from_ip_address(IPAddress)
+| extend GeoCountry = tostring(GeoInfo.country)
+| lookup kind=leftouter CountryCodes on CountryCode
+| extend Comparison = case(
+    isempty(Location), "Entra location missing",
+    isempty(GeoCountry), "IP lookup missing",
+    isempty(Country), "Country code not mapped",
+    tolower(Country) == tolower(GeoCountry), "Match",
+    "Mismatch"
+)
+| summarize
+    SignInCount = count(),
+    UniqueUsers = dcount(UserPrincipalName)
+    by Location, EntraCountry=Country, GeoCountry, Comparison
+| order by SignInCount desc
