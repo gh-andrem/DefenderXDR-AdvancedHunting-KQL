@@ -1,0 +1,28 @@
+//name: Entra ID - Unique Sign-In Users by Country
+//updated: 2026-9-22
+//description:
+//This query returns the number of unique users that generated Entra ID sign-in logs per country during the last 180 days.
+//Country codes from the SigninLogs table are mapped to country names using an external CSV file.
+//The results include the country name, country code, and unique user count, ordered from highest to lowest.
+let CountryCodes =
+    externaldata(Country:string, CountryCode:string)
+    [
+        @"https://raw.githubusercontent.com/mattiasborg82/Hunting/main/General/cc.csv"
+    ]
+    with (
+        format = "csv",
+        ignoreFirstRecord = true
+    )
+    | extend CountryCode = toupper(trim(" ", CountryCode))
+    | project CountryCode, Country;
+SigninLogs
+| where TimeGenerated >= ago(180d)
+| where isnotempty(Location)
+| extend CountryCode = toupper(trim(" ", Location))
+| summarize UniqueUsers = dcount(UserPrincipalName) by CountryCode
+| join kind=leftouter hint.strategy=broadcast (CountryCodes) on CountryCode
+| project
+    Country = coalesce(Country, CountryCode),
+    CountryCode,
+    UniqueUsers
+| order by UniqueUsers desc
