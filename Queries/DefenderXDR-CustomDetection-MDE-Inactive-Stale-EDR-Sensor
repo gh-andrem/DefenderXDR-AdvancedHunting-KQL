@@ -1,0 +1,28 @@
+//name: MDE - Windows servers with inactive or stale EDR sensor
+//updated: 2026-10-02
+//description:
+//This query identifies onboarded Windows servers whose MDE EDR sensor is reported as Inactive or whose latest DeviceInfo record is older than 45 minutes.
+//Use this query as a custom detection in Defender XDR with a frequency of 15 minutes and a lookback period of 1 hour.
+//The 45-minute threshold ensures that the last DeviceInfo record remains within the 1-hour lookback window when the detection runs.
+let StaleThreshold = 45m;
+DeviceInfo
+| where DeviceType == "Server"
+| where OnboardingStatus == "Onboarded"
+| summarize arg_max(Timestamp, *) by DeviceId
+| where SensorHealthState == "Inactive"
+    or Timestamp < ago(StaleThreshold)
+| extend DetectionReason = case(
+    SensorHealthState == "Inactive", "EDR sensor reported as inactive",
+    "Latest DeviceInfo record is older than 45 minutes"
+)
+| project
+    Timestamp,
+    DeviceId,
+    DeviceName,
+    ReportId,
+    SensorHealthState,
+    ConnectivityType,
+    DetectionReason,
+    MachineGroup,
+    OSPlatform,
+    PublicIP
