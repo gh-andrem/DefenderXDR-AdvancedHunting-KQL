@@ -1,0 +1,66 @@
+//name: Entra ID - Sign-ins where CA was satisfied by Hybrid Join instead of MFA
+//updated: 2026-10-05
+//description:
+//This query returns sign-ins from Entra hybrid joined devices where the selected Conditional Access policy was successfully satisfied by the RequireDomainJoinedDevice grant control.
+//The query is intended for policies configured with "Require multifactor authentication" OR "Require Microsoft Entra hybrid joined device".
+//Set PolicyName to the exact display name of the Conditional Access policy.
+//Uncomment one of the last lines to summarize results by device and user or to return distinct users.
+let PolicyName = "NAME OF CA POLICY"; // Example: GLO-U-01: Grant access Hybrid Join or MFA
+SigninLogs
+| where TimeGenerated >= ago(180d)
+| extend
+    Device = todynamic(DeviceDetail),
+    Policies = todynamic(ConditionalAccessPolicies)
+| extend
+    DeviceId = tostring(Device.deviceId),
+    DeviceName = tostring(Device.displayName),
+    OperatingSystem = tostring(Device.operatingSystem),
+    Browser = tostring(Device.browser),
+    TrustType = tostring(Device.trustType),
+    IsCompliant = tobool(Device.isCompliant),
+    IsManaged = tobool(Device.isManaged)
+| where TrustType == "Hybrid Azure AD joined"
+| where isnotempty(DeviceId)
+| mv-expand Policy = Policies
+| extend
+    CAPolicyId = tostring(Policy.id),
+    CAPolicyName = tostring(Policy.displayName),
+    CAPolicyResult = tostring(Policy.result),
+    EnforcedGrantControls = todynamic(Policy.enforcedGrantControls),
+    ConditionsSatisfied = toint(Policy.conditionsSatisfied),
+    ConditionsNotSatisfied = toint(Policy.conditionsNotSatisfied)
+| where CAPolicyName == PolicyName
+| where CAPolicyResult == "success"
+| where ResultType == 0
+| where EnforcedGrantControls has "RequireDomainJoinedDevice"
+| project
+    TimeGenerated,
+    UserPrincipalName,
+    UserDisplayName,
+    AppDisplayName,
+    ResourceDisplayName,
+    ClientAppUsed,
+    IPAddress,
+    Location,
+    DeviceName,
+    DeviceId,
+    OperatingSystem,
+    Browser,
+    TrustType,
+    IsManaged,
+    IsCompliant,
+    AuthenticationRequirement,
+    AuthenticationMethodsUsed,
+    AuthenticationRequirementPolicies,
+    CAPolicyName,
+    CAPolicyResult,
+    EnforcedGrantControls,
+    ConditionsSatisfied,
+    ConditionsNotSatisfied,
+    ConditionalAccessStatus,
+    ResultType,
+    ResultDescription,
+    CorrelationId
+| order by TimeGenerated desc
+//| summarize SignInCount = count() by DeviceName, UserPrincipalName
+//| distinct UserPrincipalName
