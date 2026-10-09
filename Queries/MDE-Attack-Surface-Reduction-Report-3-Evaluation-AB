@@ -42,7 +42,7 @@ DeviceEvents
 | where Timestamp > ago(TimeFrame)
 | where ActionType startswith "Asr" and ActionType endswith AsrType
 | extend AsrRuleId = tolower(tostring(parsejson(AdditionalFields).RuleId))
-| where not(InitiatingProcessFolderPath has_any ("msiexec.exe", "svchost.exe", "c:\windows\system32\taskhostw.exe", "c:\windows\system32\snmp.exe"))
+| where not(InitiatingProcessFolderPath has_any ("msiexec.exe", "svchost.exe", "c:\\windows\\system32\\taskhostw.exe", "c:\\windows\\system32\\snmp.exe"))
 | where AsrRuleId == AsrRuleAudit
 | join kind=leftouter (AsrMatrix | project AsrRuleId = tolower(AsrRuleId), RuleDescription) on AsrRuleId
 | join kind=inner (DeviceInfo | distinct DeviceId, DeviceType, OSPlatform) on DeviceId
