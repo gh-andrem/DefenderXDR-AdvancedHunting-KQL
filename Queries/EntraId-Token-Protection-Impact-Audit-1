@@ -1,0 +1,34 @@
+// name: Entra ID - Token Protection Conditional Access Policy Impact Analysis #1
+// updated: 2026-10-29
+// description:
+// Gives an overview of how a Conditional Access token protection policy is evaluated across interactive and non-interactive sign-ins. For each client app and resource,
+// it shows how many requests and users would be allowed or blocked if the policy were enforced. Use it to assess impact before moving the policy from report-only to On.
+// Setup:
+// Line 9: Replace the value of policyName with the exact display name of the token protection Conditional Access policy in your tenant.The match is case-sensitive and must match exactly.
+// Line 10: Choose the appropriate lookback time which should be at least 30 days.
+let policyName = "CA-X-10 - Token Protection Windows";
+let lookback = 30d;
+let si = SigninLogs
+    | where TimeGenerated > ago(lookback)
+    | where ConditionalAccessPolicies has policyName
+    | project Id, UserPrincipalName, AppDisplayName, ResourceDisplayName, CAP = todynamic(tostring(ConditionalAccessPolicies)), Source = "Interactive";
+let nsi = AADNonInteractiveUserSignInLogs
+    | where TimeGenerated > ago(lookback)
+    | where ConditionalAccessPolicies has policyName
+    | project Id, UserPrincipalName, AppDisplayName, ResourceDisplayName, CAP = todynamic(ConditionalAccessPolicies), Source = "NonInteractive";
+union si, nsi
+| mv-apply CAP on (
+    where tostring(CAP.displayName) == policyName
+    | where tostring(CAP.result) !in ("reportOnlyNotApplied", "notApplied")
+    | extend NotSatisfied = tostring(CAP.sessionControlsNotSatisfied)
+    | project Result = iff(NotSatisfied has_any ("SignInTokenProtection", "Binding"), "WouldBlock", "WouldAllow")
+  )
+| summarize Result = take_any(Result) by Id, Source, UserPrincipalName, AppDisplayName, ResourceDisplayName
+| summarize Requests   = count(),
+            Users      = dcount(UserPrincipalName),
+            WouldBlock = countif(Result == "WouldBlock"),
+            WouldAllow = countif(Result == "WouldAllow"),
+            BlockedUsers = dcountif(UserPrincipalName, Result == "WouldBlock")
+    by Source, AppDisplayName, ResourceDisplayName
+| extend PctAllowed = round(100.0 * WouldAllow / Requests, 2)
+| sort by Requests desc
