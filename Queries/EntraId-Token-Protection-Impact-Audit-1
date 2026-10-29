@@ -6,7 +6,7 @@
 // Setup:
 // Line 9: Replace the value of policyName with the exact display name of the token protection Conditional Access policy in your tenant.The match is case-sensitive and must match exactly.
 // Line 10: Choose the appropriate lookback time which should be at least 30 days.
-let policyName = "CA-X-10 - Token Protection Windows";
+let policyName = "<ENTER YOUR CONDITIONAL ACCESS POLICY NAME>";
 let lookback = 30d;
 let si = SigninLogs
     | where TimeGenerated > ago(lookback)
