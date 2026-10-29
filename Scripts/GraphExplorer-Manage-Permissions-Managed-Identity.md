@@ -1,4 +1,4 @@
-# Manage Microsoft Graph Permissions for Managed Identities
+# Manage Microsoft Graph Permissions for Managed Identities through Graph Explorer
 
 Managed identities are represented in Microsoft Entra ID as service principals. Microsoft Graph application permissions are granted to managed identities by creating app-role assignments.
 
