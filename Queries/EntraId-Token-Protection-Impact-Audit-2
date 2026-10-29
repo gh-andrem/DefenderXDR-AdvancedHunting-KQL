@@ -1,0 +1,57 @@
+// name: Entra ID - Token Protection Conditional Access Policy Failure Analysis #2
+// updated: 2026-10-29
+// description:
+// Identifies interactive and non-interactive sign-ins where the selected Conditional Access policy was applied but its token protection or token binding session control was not satisfied.
+// For each user and device, it summarizes the number and timeframe of affected requests, accessed apps and resources, client applications, user agents, session status codes, and sign-in sources.
+// Use this query to investigate why users or devices cannot satisfy token protection requirements
+// Setup:
+// Line 10: Replace the value of policyName with the exact display name of the token protection Conditional Access policy in your tenant. The match is case-sensitive and must match exactly.
+// Line 11: Set the lookback period used to analyze sign-ins. A period of at least 30 days is recommended to capture less frequent sign-in scenarios.
+let policyName = "<ENTER YOUR CONDITIONAL ACCESS POLICY NAME>";
+let lookback = 30d;
+let si = SigninLogs
+    | where TimeGenerated > ago(lookback)
+    | extend CAP = todynamic(tostring(ConditionalAccessPolicies)),
+             DD  = todynamic(tostring(DeviceDetail)),
+             TPS = todynamic(tostring(column_ifexists("TokenProtectionStatusDetails", ""))),
+             UA  = tostring(column_ifexists("UserAgent", "")),
+             CAU = tostring(column_ifexists("ClientAppUsed", ""))
+    | project TimeGenerated, UserPrincipalName, AppDisplayName, ResourceDisplayName, CAP, DD, TPS, UA, CAU, Source = "Interactive";
+let nsi = AADNonInteractiveUserSignInLogs
+    | where TimeGenerated > ago(lookback)
+    | extend CAP = todynamic(tostring(ConditionalAccessPolicies)),
+             DD  = todynamic(tostring(DeviceDetail)),
+             TPS = todynamic(tostring(column_ifexists("TokenProtectionStatusDetails", ""))),
+             UA  = tostring(column_ifexists("UserAgent", "")),
+             CAU = tostring(column_ifexists("ClientAppUsed", ""))
+    | project TimeGenerated, UserPrincipalName, AppDisplayName, ResourceDisplayName, CAP, DD, TPS, UA, CAU, Source = "NonInteractive";
+union si, nsi
+| mv-expand CAP
+| where tostring(CAP.displayName) == policyName
+| where tostring(CAP.result) !in ("reportOnlyNotApplied", "notApplied")
+| extend NotSatisfied = tostring(CAP.sessionControlsNotSatisfied)
+| where NotSatisfied has "SignInTokenProtection" or NotSatisfied has "Binding"
+| extend DeviceId    = tostring(DD.deviceId),
+         DeviceName  = tostring(DD.displayName),
+         OS          = tostring(DD.operatingSystem),
+         Browser     = tostring(DD.browser),
+         TrustType   = tostring(DD.trustType),
+         IsManaged   = tostring(DD.isManaged),
+         IsCompliant = tostring(DD.isCompliant),
+         SessionStatusCode = tostring(TPS.signInSessionStatusCode)
+| extend LikelyReason = case(
+    isempty(DeviceId), "No device ID in sign-in record. Possible unregistered device, unsupported client or non-brokered authentication",
+    OS !has "Windows", "Non-Windows platform reported",
+    isnotempty(Browser) and Browser !has "Rich Client", "Browser-based access (not supported for these resources)",
+    TrustType == "Workplace", "Entra registered device - check app/account uses the device PRT",
+    "Registered Windows device - likely unsupported/outdated client or secondary account")
+| summarize Requests = count(),
+            FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated),
+            Apps = make_set(AppDisplayName, 10),
+            Resources = make_set(ResourceDisplayName, 10),
+            ClientApps = make_set(CAU, 5),
+            UserAgents = make_set(UA, 3),
+            SessionStatuses = make_set(SessionStatusCode, 5),
+            Sources = make_set(Source)
+          by UserPrincipalName, DeviceName, DeviceId, OS, TrustType, IsManaged, IsCompliant, LikelyReason
+| sort by UserPrincipalName asc, Requests desc
