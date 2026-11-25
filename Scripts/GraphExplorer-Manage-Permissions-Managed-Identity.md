@@ -68,7 +68,11 @@ GET https://graph.microsoft.com/v1.0/servicePrincipals(appId='00000003-0000-0000
 From the response:
 
 1. Copy the top-level `id`. This is the `RESOURCE_SERVICE_PRINCIPAL_ID`.
-2. Search `appRoles` for the required permission, such as `"value": "User.Read.All"`.
+
+<img width="1012" height="236" alt="image" src="https://github.com/user-attachments/assets/6137731e-ab83-4e83-9396-af9e72e3c052" />
+
+
+2. Search `appRoles` for the required permission, such as `"value": "AuditLog.Read.All"`.
 3. Confirm that its `allowedMemberTypes` property contains `"Application"`.
 4. Copy the matching role's `id`. This is the `APP_ROLE_ID`.
 
@@ -107,20 +111,7 @@ Set the request body to:
   "appRoleId": "APP_ROLE_ID"
 }
 ```
-
-The properties have the following meanings:
-
-| Property | Value |
-|---|---|
-| `principalId` | Object ID of the managed identity service principal |
-| `resourceId` | Object ID of the service principal that exposes the permission |
-| `appRoleId` | ID of the application permission being assigned |
-
-A successful request returns:
-
-```http
-201 Created
-```
+A successful request returns `201 Created`
 
 ## List assigned permissions
 
