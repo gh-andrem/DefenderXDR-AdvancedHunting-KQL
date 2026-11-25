@@ -76,17 +76,19 @@ Example application-role definition:
 
 ```json
 {
-  "id": "APP_ROLE_ID",
-  "value": "User.Read.All",
-  "displayName": "Read all users' full profiles",
-  "allowedMemberTypes": [
-    "Application"
-  ],
-  "isEnabled": true
+    "allowedMemberTypes": [
+        "Application"
+    ],
+    "description": "Allows the app to read and query your audit log activities, without a signed-in user.",
+    "displayName": "Read all audit log data",
+    "id": "APP_ROLE_ID",
+    "isEnabled": true,
+    "origin": "Application",
+    "value": "AuditLog.Read.All"
 }
 ```
 
-Do not use the ID of the delegated permission. Managed identities use application permissions.
+**Do not use the ID of the delegated permission. Managed identities use application permissions.**
 
 ### Create the app-role assignment
 
